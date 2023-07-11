@@ -52,7 +52,7 @@
 #include "llvm/Transforms/Obfuscation/EncodeFuncName.h"
 #include "llvm/Transforms/Obfuscation/Flattening.h"
 #include "llvm/Transforms/Obfuscation/Split.h"
-#include "llvm/Transforms/Obfuscation/StringEncryption.h"
+#include "llvm/Transforms/Obfuscation/StringObfuscation.h"
 #include "llvm/Transforms/Obfuscation/Substitution.h"
 
 using namespace llvm;
@@ -152,8 +152,11 @@ static cl::opt<std::string> AesSeed("aesSeed", cl::init(""),
 static cl::opt<bool> Split("split", cl::init(false),
                            cl::desc("Enable basic block splitting"));
 
-static cl::opt<bool> StringEncryption("sobf", cl::init(false),
-                                    cl::desc("Enable String"));
+static cl::opt<std::string> Seed("seed", cl::init(""),
+                           cl::desc("seed for the random"));
+
+static cl::opt<bool> StringObf("sobf", cl::init(false),
+                           cl::desc("Enable the string obfuscation"));
 
 static cl::opt<bool> EncodeFuncName("fun", cl::init(false),
                                       cl::desc("Enable String"));
@@ -212,6 +215,12 @@ PassManagerBuilder::PassManagerBuilder() {
           exit(1);
         }
     }
+
+    //random generator
+        if(!Seed.empty()) {
+            if(!llvm::cryptoutils->prng_seed(Seed.c_str()))
+              exit(1);
+        }
 }
 
 PassManagerBuilder::~PassManagerBuilder() {
@@ -486,9 +495,7 @@ void PassManagerBuilder::populateModulePassManager(
   if(EncodeFuncName){
     MPM.add(createEncodeFuncName());
   }
-  if(StringEncryption){
-    MPM.add(createStringEncryptionPass());
-  }
+  MPM.add(createStringObfuscation(StringObf));
   // If all optimizations are disabled, just run the always-inline pass and,
   // if enabled, the function merging pass.
   if (OptLevel == 0) {
